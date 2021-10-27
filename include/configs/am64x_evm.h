@@ -18,6 +18,38 @@
 /* DDR Configuration */
 #define CONFIG_SYS_SDRAM_BASE1		0x880000000
 
+/* NAND support */
+
+/* NAND Device Configuration : MT29F8G08ADAFAH4 chip */
+#define CONFIG_SYS_NAND_5_ADDR_CYCLE
+
+/* NAND Driver config */
+#define CONFIG_SYS_NAND_BAD_BLOCK_POS   NAND_LARGE_BADBLOCK_POS
+
+#define CONFIG_SYS_NAND_ECCPOS		{ 2, 3, 4, 5, 6, 7, 8, 9, \
+					 10, 11, 12, 13, 14, 15, 16, 17, \
+					 18, 19, 20, 21, 22, 23, 24, 25, \
+					 26, 27, 28, 29, 30, 31, 32, 33, \
+					 34, 35, 36, 37, 38, 39, 40, 41, \
+					 42, 43, 44, 45, 46, 47, 48, 49, \
+					 50, 51, 52, 53, 54, 55, 56, 57, }
+#define CONFIG_SYS_NAND_ECCSIZE         512
+#define CONFIG_SYS_NAND_ECCBYTES        14
+
+#ifdef CONFIG_SYS_K3_SPL_ATF
+#define CONFIG_SYS_NAND_U_BOOT_OFFS     0x200000	/* tispl.bin partition */
+#else
+#define CONFIG_SYS_NAND_U_BOOT_OFFS     0x600000	/* u-boot.img partition */
+#endif
+
+#define CONFIG_SYS_NAND_MAX_CHIPS       1
+
+#define CONFIG_SYS_MAX_NAND_DEVICE      1
+
+#define CONFIG_SYS_NAND_BASE            0x51000000
+
+/*-- end NAND config --*/
+
 #define PARTS_DEFAULT \
 	/* Linux partitions */ \
 	"name=rootfs,start=0,size=-,uuid=${uuid_gpt_rootfs}\0"
