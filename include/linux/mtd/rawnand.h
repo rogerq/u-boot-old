@@ -774,6 +774,10 @@ nand_get_sdr_timings(const struct nand_data_interface *conf)
 	return &conf->timings.sdr;
 }
 
+/* NAND Controller Quirks */
+
+#define NAND_QUIRK_FORCE_32BIT_READS	BIT(0)
+
 /**
  * struct nand_manufacturer_ops - NAND Manufacturer operations
  * @detect: detect the NAND memory organization and capabilities
@@ -887,6 +891,7 @@ struct nand_manufacturer_ops {
  * @priv:		[OPTIONAL] pointer to private chip data
  * @write_page:		[REPLACEABLE] High-level page write function
  * @manufacturer:	[INTERN] Contains manufacturer information
+ * @quirks:		[OPTIONAL] Platform specific quirks
  */
 
 struct nand_chip {
@@ -978,6 +983,8 @@ struct nand_chip {
 		const struct nand_manufacturer *desc;
 		void *priv;
 	} manufacturer;
+
+	u32 quirks;
 };
 
 static inline void nand_set_flash_node(struct nand_chip *chip,
