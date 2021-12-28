@@ -239,4 +239,22 @@
 	pinctrl-0 = <&main_usb0_pins_default>;
 };
 
+#include "k3-am642-evm-nand.dtsi"
+
+&gpmc0_pins_default {
+	u-boot,dm-spl;
+};
+
+&gpmc0 {
+	u-boot,dm-spl;
+};
+
+&main_gpio0 {
+	u-boot,dm-spl;
+};
+
+&nand0_0 {
+	u-boot,dm-spl;
+};
+
 #include "k3-am642-evm-u-boot.dtsi"
