@@ -574,3 +574,5 @@
 	num-lanes = <1>;
 	status = "disabled";
 };
+
+#include "k3-am642-evm-nand.dtsi"
