@@ -120,6 +120,36 @@
 		"run get_fdt_usb;"					\
 		"run run_kern\0"
 
+#define EXTRA_ENV_AM642_BOARD_SETTINGS_NAND				\
+	"nbootpart=NAND.file-system\0"					\
+	"nbootvolume=ubi0:rootfs\0"					\
+	"bootdir=/boot\0"						\
+	"rd_spec=-\0"							\
+	"ubi_init=ubi part ${nbootpart}; ubifsmount ${nbootvolume};\0"	\
+	"args_nand=setenv bootargs console=${console} "			\
+		"${optargs} ubi.mtd=${nbootpart} "			\
+		"root=${nbootvolume} rootfstype=ubifs\0"			\
+	"init_nand=run args_all args_nand ubi_init\0"			\
+	"get_fdt_nand=ubifsload ${fdtaddr} ${bootdir}/${fdtfile};\0"	\
+	"get_overlay_nand="						\
+		"fdt address ${fdtaddr};"				\
+		"fdt resize 0x100000;"					\
+		"for overlay in $name_overlays;"			\
+		"do;"							\
+		"ubifsload ${dtboaddr} ${bootdir}/${overlay} && "	\
+		"fdt apply ${dtboaddr};"				\
+		"done;\0"						\
+	"get_kern_nand=ubifsload ${loadaddr} ${bootdir}/${name_kern}\0"	\
+	"get_fit_nand=ubifsload ${addr_fit} ${bootdir}/${name_fit}\0"
+
+#ifdef CONFIG_TARGET_AM642_A53_EVM
+#define EXTRA_ENV_AM642_BOARD_SETTINGS_MTD				\
+	"mtdids=" CONFIG_MTDIDS_DEFAULT "\0"				\
+	"mtdparts=" CONFIG_MTDPARTS_DEFAULT "\0"
+#else
+#define EXTRA_ENV_AM642_BOARD_SETTINGS_MTD
+#endif
+
 #define EXTRA_ENV_DFUARGS \
 	DFU_ALT_INFO_MMC \
 	DFU_ALT_INFO_EMMC \
@@ -133,7 +163,8 @@
 	EXTRA_ENV_AM642_BOARD_SETTINGS					\
 	EXTRA_ENV_AM642_BOARD_SETTINGS_MMC				\
 	EXTRA_ENV_DFUARGS						\
-	EXTRA_ENV_AM642_BOARD_SETTING_USBMSC
+	EXTRA_ENV_AM642_BOARD_SETTING_USBMSC				\
+	EXTRA_ENV_AM642_BOARD_SETTINGS_NAND
 
 /* Now for the remaining common defines */
 #include <configs/ti_armv7_common.h>
