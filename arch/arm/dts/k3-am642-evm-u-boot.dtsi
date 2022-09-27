@@ -122,3 +122,19 @@
 &cpsw_port2 {
 	status = "disabled";
 };
+
+&gpmc0_pins_default {
+	u-boot,dm-spl;
+};
+
+&gpmc0 {
+	u-boot,dm-spl;
+};
+
+&main_gpio0 {
+	u-boot,dm-spl;
+};
+
+&nand0_0 {
+	u-boot,dm-spl;
+};
