@@ -175,6 +175,7 @@ static int nand_read_page(int block, int page, void *dst)
 	int eccsteps = ECCSTEPS;
 	uint8_t *p = dst;
 
+	printf("read_page b %d p %d dst %x\n", block, page, dst);
 	nand_command(block, page, 0, NAND_CMD_READ0);
 
 	for (i = 0; eccsteps; eccsteps--, i += eccbytes, p += eccsize) {
@@ -210,6 +211,7 @@ void nand_init(void)
 	/*
 	 * Init board specific nand support
 	 */
+	printf("nand_init\n");
 	mtd = nand_to_mtd(&nand_chip);
 	nand_chip.IO_ADDR_R = nand_chip.IO_ADDR_W =
 		(void  __iomem *)CONFIG_SYS_NAND_BASE;
@@ -224,6 +226,7 @@ void nand_init(void)
 
 	if (nand_chip.select_chip)
 		nand_chip.select_chip(mtd, 0);
+	printf("nand_init...done\n");
 }
 
 /* Unselect after operation */
