@@ -3,17 +3,13 @@ int nand_spl_load_image(uint32_t offs, unsigned int size, void *dst)
 	unsigned int block, lastblock;
 	unsigned int page, page_offset;
 
-	printf("%s o %x size %x dst %x\n", __func__, offs, size, dst);
 	/* offs has to be aligned to a page address! */
 	block = offs / CONFIG_SYS_NAND_BLOCK_SIZE;
 	lastblock = (offs + size - 1) / CONFIG_SYS_NAND_BLOCK_SIZE;
 	page = (offs % CONFIG_SYS_NAND_BLOCK_SIZE) / CONFIG_SYS_NAND_PAGE_SIZE;
 	page_offset = offs % CONFIG_SYS_NAND_PAGE_SIZE;
 
-	printf("b %x, lb %x p %x, po %x\n", block, lastblock, page, page_offset);
-
 	while (block <= lastblock) {
-		printf("block %x\n", block);
 		if (!nand_is_bad_block(block)) {
 			/* Skip bad blocks */
 			while (page < CONFIG_SYS_NAND_PAGE_COUNT) {
@@ -40,10 +36,7 @@ int nand_spl_load_image(uint32_t offs, unsigned int size, void *dst)
 		}
 
 		block++;
-		printf("incrementing block\n");
 	}
-
-	printf("done\n");
 
 	return 0;
 }
