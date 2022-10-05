@@ -76,6 +76,7 @@ enum uclass_id {
 	UCLASS_MASS_STORAGE,	/* Mass storage device */
 	UCLASS_MDIO,		/* MDIO bus */
 	UCLASS_MDIO_MUX,	/* MDIO MUX/switch */
+	UCLASS_MEMORY,		/* Memory Controller device */
 	UCLASS_MISC,		/* Miscellaneous device */
 	UCLASS_MMC,		/* SD / MMC card or chip */
 	UCLASS_MOD_EXP,		/* RSA Mod Exp device */
