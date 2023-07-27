@@ -148,6 +148,8 @@ Image formats:
 A53 SPL DDR Memory Layout
 -------------------------
 
+.. am62x_evm_rst_include_start_ddr_mem_layout
+
 This provides an overview memory usage in A53 SPL stage.
 
 .. list-table::
@@ -201,6 +203,7 @@ This provides an overview memory usage in A53 SPL stage.
    * - EMPTY
      - 0x80d00400
      - 0x81000000
+.. am62x_evm_rst_include_end_ddr_mem_layout
 
 Switch Setting for Boot Mode
 ----------------------------
