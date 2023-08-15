@@ -148,6 +148,46 @@
 	/delete-property/ ti,fails-without-test-cd;
 };
 
+/* U-boot has no support for mdio-gpio: We'll use cpsw-mdio instead */
+&mdio0 {
+	status = "disabled";
+};
+
+&mdio0_pins_default {
+	bootph-pre-ram;
+	/* Override from GPIO to MDIO mux configuration */
+	pinctrl-single,pins = <
+		AM62X_IOPAD(0x0160, PIN_OUTPUT, 0) /* (AD24) MDIO0_MDC */
+		AM62X_IOPAD(0x015c, PIN_INPUT, 0) /* (AB22) MDIO0_MDIO */
+	>;
+};
+
+&cpsw3g_mdio {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&mdio0_pins_default>;
+	bootph-pre-ram;
+
+	cpsw3g_new_phy0: ethernet-phy@0 {
+		reg = <0>;
+		bootph-pre-ram;
+	};
+};
+
+&cpsw3g {
+	bootph-pre-ram;
+};
+
+&cpsw_port1 {
+        phy-handle = <&cpsw3g_new_phy0>;
+	bootph-pre-ram;
+};
+
+&cpsw_port2 {
+	/* We wont support SPE port in U-boot */
+	status = "disabled";
+};
+
 #ifdef CONFIG_TARGET_AM625_A53_EVM
 
 #define SPL_AM625_BEAGLEPLAY_DTB "spl/dts/k3-am625-beagleplay.dtb"
