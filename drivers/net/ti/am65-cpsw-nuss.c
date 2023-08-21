@@ -27,6 +27,7 @@
 #include <syscon.h>
 #include <linux/bitops.h>
 #include <linux/soc/ti/ti-udma.h>
+#include <linux/delay.h>
 
 #include "cpsw_mdio.h"
 
@@ -678,14 +679,22 @@ static int am65_cpsw_phy_init(struct udevice *dev)
 	struct am65_cpsw_priv *priv = dev_get_priv(dev);
 	struct am65_cpsw_common *cpsw_common = priv->cpsw_common;
 	struct eth_pdata *pdata = dev_get_plat(dev);
-	struct phy_device *phydev;
 	u32 supported = PHY_GBIT_FEATURES;
+	struct phy_device *phydev;
+	int tries;
 	int ret;
 
-	phydev = phy_connect(cpsw_common->bus,
-			     priv->phy_addr,
-			     priv->dev,
-			     pdata->phy_interface);
+	/* Some boards (e.g. beagleplay) don't work on first go */
+	for (tries = 1; tries <= 5; tries++) {
+		phydev = phy_connect(cpsw_common->bus,
+				     priv->phy_addr,
+				     priv->dev,
+				     pdata->phy_interface);
+		if (phydev)
+			break;
+
+		mdelay(10);
+	}
 
 	if (!phydev) {
 		dev_err(dev, "phy_connect() failed\n");
