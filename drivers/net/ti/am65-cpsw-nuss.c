@@ -701,6 +701,8 @@ static int am65_cpsw_phy_init(struct udevice *dev)
 		dev_err(dev, "phy_connect() failed\n");
 		return -ENODEV;
 	}
+	else
+		printf("phy found in %d trys\n", trys);
 
 	phydev->supported &= supported;
 	if (pdata->max_speed) {
