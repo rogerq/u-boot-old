@@ -105,161 +105,200 @@ static void cpsw_mdio_enable_manual_mode(struct cpsw_mdio *mdio)
 	writel(reg, &mdio->regs->poll);
 }
 
-static void cpsw_mdio_sw_set_bit(struct cpsw_mdio *mdio,
-				 enum cpsw_mdio_manual bit)
+static void set_mdc(struct cpsw_mdio *mdio, int level)
 {
 	u32 reg;
 
 	reg = readl(&mdio->regs->manualif);
-
-	switch (bit) {
-	case MDIO_OE:
-		reg |= MDIO_MAN_OE;
-		writel(reg, &mdio->regs->manualif);
-		break;
-	case MDIO_PIN:
-		reg |= MDIO_MAN_PIN;
-		writel(reg, &mdio->regs->manualif);
-		break;
-	case MDIO_MDCLK:
+	if (level)
 		reg |= MDIO_MAN_MDCLK_O;
-		writel(reg, &mdio->regs->manualif);
-		break;
-	default:
-		break;
-	};
-}
-
-static void cpsw_mdio_sw_clr_bit(struct cpsw_mdio *mdio,
-				 enum cpsw_mdio_manual bit)
-{
-	u32 reg;
-
-	reg = readl(&mdio->regs->manualif);
-
-	switch (bit) {
-	case MDIO_OE:
-		reg &= ~MDIO_MAN_OE;
-		writel(reg, &mdio->regs->manualif);
-		break;
-	case MDIO_PIN:
-		reg &= ~MDIO_MAN_PIN;
-		writel(reg, &mdio->regs->manualif);
-		break;
-	case MDIO_MDCLK:
-		reg = readl(&mdio->regs->manualif);
+	else
 		reg &= ~MDIO_MAN_MDCLK_O;
-		writel(reg, &mdio->regs->manualif);
-		break;
-	default:
-		break;
-	};
+
+	writel(reg, &mdio->regs->manualif);
 }
 
-static int cpsw_mdio_test_man_bit(struct cpsw_mdio *mdio,
-				  enum cpsw_mdio_manual bit)
+static void set_mdio_dir(struct cpsw_mdio *mdio, int output)
 {
 	u32 reg;
 
 	reg = readl(&mdio->regs->manualif);
-	return test_bit(bit, &reg);
+	if (output)
+		reg |= MDIO_MAN_OE;
+	else
+		reg &= ~MDIO_MAN_OE;
+
+	writel(reg, &mdio->regs->manualif);
 }
 
-static void cpsw_mdio_toggle_man_bit(struct cpsw_mdio *mdio,
-				     enum cpsw_mdio_manual bit)
+static void set_mdio_data(struct cpsw_mdio *mdio, int value)
 {
-	cpsw_mdio_sw_clr_bit(mdio, bit);
-	cpsw_mdio_sw_set_bit(mdio, bit);
+	u32 reg;
+
+	reg = readl(&mdio->regs->manualif);
+	if (value)
+		reg |= MDIO_MAN_PIN;
+	else
+		reg &= ~MDIO_MAN_PIN;
+
+	writel(reg, &mdio->regs->manualif);
 }
 
-static void cpsw_mdio_man_send_pattern(struct cpsw_mdio *mdio,
-				       u32 bitrange, u32 val)
+static int get_mdio_data(struct cpsw_mdio *mdio)
 {
-	u32 i;
+	u32 reg;
 
-	for (i = bitrange; i; i = i >> 1) {
-		if (i & val)
-			cpsw_mdio_sw_set_bit(mdio, MDIO_PIN);
-		else
-			cpsw_mdio_sw_clr_bit(mdio, MDIO_PIN);
+	reg = readl(&mdio->regs->manualif);
 
-		cpsw_mdio_toggle_man_bit(mdio, MDIO_MDCLK);
-	}
+	return test_bit(MDIO_PIN, &reg);
 }
 
-static void cpsw_mdio_sw_preamble(struct cpsw_mdio *mdio)
+#define MDIO_READ 2
+#define MDIO_WRITE 1
+
+#define MDIO_C45 (1<<15)
+
+/* Minimum MDC period is 400 ns, plus some margin for error.  MDIO_DELAY
+ * is done twice per period.
+ */
+#define MDIO_DELAY 250
+
+/* The PHY may take up to 300 ns to produce data, plus some margin
+ * for error.
+ */
+#define MDIO_READ_DELAY 350
+
+/* MDIO must already be configured as output. */
+static void mdiobb_send_bit(struct cpsw_mdio *ctrl, int val)
 {
-	u32 i;
+        set_mdio_data(ctrl, val);
+        ndelay(MDIO_DELAY);
+        set_mdc(ctrl, 1);
+        ndelay(MDIO_DELAY);
+        set_mdc(ctrl, 0);
+}
 
-	cpsw_mdio_sw_clr_bit(mdio, MDIO_OE);
+/* MDIO must already be configured as input. */
+static int mdiobb_get_bit(struct cpsw_mdio *ctrl)
+{
+        ndelay(MDIO_DELAY);
+        set_mdc(ctrl, 1);
+        ndelay(MDIO_READ_DELAY);
+        set_mdc(ctrl, 0);
 
-	cpsw_mdio_sw_clr_bit(mdio, MDIO_MDCLK);
-	cpsw_mdio_sw_clr_bit(mdio, MDIO_MDCLK);
-	cpsw_mdio_sw_clr_bit(mdio, MDIO_MDCLK);
-	cpsw_mdio_sw_set_bit(mdio, MDIO_MDCLK);
+        return get_mdio_data(ctrl);
+}
 
-	for (i = 0; i < 32; i++) {
-		cpsw_mdio_sw_clr_bit(mdio, MDIO_MDCLK);
-		cpsw_mdio_sw_clr_bit(mdio, MDIO_MDCLK);
-		cpsw_mdio_sw_clr_bit(mdio, MDIO_MDCLK);
-		cpsw_mdio_toggle_man_bit(mdio, MDIO_MDCLK);
-	}
+/* MDIO must already be configured as output. */
+static void mdiobb_send_num(struct cpsw_mdio *ctrl, u16 val, int bits)
+{
+        int i;
+
+        for (i = bits - 1; i >= 0; i--)
+                mdiobb_send_bit(ctrl, (val >> i) & 1);
+}
+
+/* MDIO must already be configured as input. */
+static u16 mdiobb_get_num(struct cpsw_mdio *ctrl, int bits)
+{
+        int i;
+        u16 ret = 0;
+
+        for (i = bits - 1; i >= 0; i--) {
+                ret <<= 1;
+                ret |= mdiobb_get_bit(ctrl);
+        }
+
+        return ret;
+}
+
+static void mdiobb_cmd(struct cpsw_mdio *ctrl, int op, u8 phy, u8 reg)
+{
+	int i;
+
+	set_mdio_dir(ctrl, 1);
+
+	/*
+	 * Send a 32 bit preamble ('1's) with an extra '1' bit for good
+	 * measure.  The IEEE spec says this is a PHY optional
+	 * requirement.  The AMD 79C874 requires one after power up and
+	 * one after a MII communications error.  This means that we are
+	 * doing more preambles than we need, but it is safer and will be
+	 * much more robust.
+	 */
+
+	for (i = 0; i < 32; i++)
+		mdiobb_send_bit(ctrl, 1);
+
+	/* send the start bit (01) and the read opcode (10) or write (01).
+	   Clause 45 operation uses 00 for the start and 11, 10 for
+	   read/write */
+	mdiobb_send_bit(ctrl, 0);
+/*
+	if (op & MDIO_C45)
+		mdiobb_send_bit(ctrl, 0);
+	else
+*/
+		mdiobb_send_bit(ctrl, 1);
+	mdiobb_send_bit(ctrl, (op >> 1) & 1);
+	mdiobb_send_bit(ctrl, (op >> 0) & 1);
+
+	mdiobb_send_num(ctrl, phy, 5);
+	mdiobb_send_num(ctrl, reg, 5);
+}
+
+static int mdiobb_read_common(struct cpsw_mdio *ctrl, int phy)
+{
+        int ret, i;
+
+        set_mdio_dir(ctrl, 0);
+
+        /* check the turnaround bit: the PHY should be driving it to zero, if this
+         * PHY is listed in phy_ignore_ta_mask as having broken TA, skip that
+         */
+        if (mdiobb_get_bit(ctrl) != 0) {
+                /* PHY didn't drive TA low -- flush any bits it
+                 * may be trying to send.
+                 */
+                for (i = 0; i < 32; i++)
+                        mdiobb_get_bit(ctrl);
+
+                return 0xffff;
+        }
+
+        ret = mdiobb_get_num(ctrl, 16);
+        mdiobb_get_bit(ctrl);
+
+        return ret;
+}
+
+static int mdiobb_write_common(struct cpsw_mdio *ctrl, u16 val)
+{
+        /* send the turnaround (10) */
+        mdiobb_send_bit(ctrl, 1);
+        mdiobb_send_bit(ctrl, 0);
+
+        mdiobb_send_num(ctrl, val, 16);
+
+        set_mdio_dir(ctrl, 0);
+        mdiobb_get_bit(ctrl);
+
+        return 0;
 }
 
 static int cpsw_mdio_sw_read(struct mii_dev *bus, int phy_id,
 			     int dev_addr, int phy_reg)
 {
 	struct cpsw_mdio *mdio = bus->priv;
-	u32 reg, i;
-	u8 ack;
+	int reg;
 
-	if (phy_reg & ~PHY_REG_MASK || phy_id & ~PHY_ID_MASK)
-		return -EINVAL;
+//	if (phy_reg & ~PHY_REG_MASK || phy_id & ~PHY_ID_MASK)
+//		return -EINVAL;
 
-	cpsw_mdio_disable(mdio);
-	cpsw_mdio_enable_manual_mode(mdio);
-	cpsw_mdio_sw_preamble(mdio);
+        mdiobb_cmd(mdio, MDIO_READ, phy_id, phy_reg);
 
-	cpsw_mdio_sw_clr_bit(mdio, MDIO_MDCLK);
-	cpsw_mdio_sw_set_bit(mdio, MDIO_OE);
-
-	/* Issue clause 22 MII read function {0,1,1,0} */
-	cpsw_mdio_man_send_pattern(mdio, C22_BITRANGE, C22_READ_PATTERN);
-
-	/* Send the device number MSB first */
-	cpsw_mdio_man_send_pattern(mdio, PHY_BITRANGE, phy_id);
-
-	/* Send the register number MSB first */
-	cpsw_mdio_man_send_pattern(mdio, PHY_BITRANGE, phy_reg);
-
-	/* Send turn around cycles */
-	cpsw_mdio_sw_clr_bit(mdio, MDIO_OE);
-
-	cpsw_mdio_toggle_man_bit(mdio, MDIO_MDCLK);
-
-	ack = cpsw_mdio_test_man_bit(mdio, MDIO_PIN);
-	cpsw_mdio_toggle_man_bit(mdio, MDIO_MDCLK);
-
-	reg = 0;
-	if (ack == 0) {
-		for (i = MDIO_BITRANGE; i; i = i >> 1) {
-			if (cpsw_mdio_test_man_bit(mdio, MDIO_PIN))
-				reg |= i;
-
-			cpsw_mdio_toggle_man_bit(mdio, MDIO_MDCLK);
-		}
-	} else {
-		for (i = MDIO_BITRANGE; i; i = i >> 1)
-			cpsw_mdio_toggle_man_bit(mdio, MDIO_MDCLK);
-
-		reg = 0xFFFF;
-	}
-
-	cpsw_mdio_sw_clr_bit(mdio, MDIO_MDCLK);
-	cpsw_mdio_sw_set_bit(mdio, MDIO_MDCLK);
-	cpsw_mdio_sw_set_bit(mdio, MDIO_MDCLK);
-	cpsw_mdio_toggle_man_bit(mdio, MDIO_MDCLK);
-
+        reg = mdiobb_read_common(mdio, phy_id);
+//	printf("read %d %d %d = 0x%x\n", phy_id, dev_addr, phy_reg, reg);
 	return reg;
 }
 
@@ -268,41 +307,13 @@ static int cpsw_mdio_sw_write(struct mii_dev *bus, int phy_id,
 {
 	struct cpsw_mdio *mdio = bus->priv;
 
-	if ((phy_reg & ~PHY_REG_MASK) || (phy_id & ~PHY_ID_MASK))
-		return -EINVAL;
+//	if ((phy_reg & ~PHY_REG_MASK) || (phy_id & ~PHY_ID_MASK))
+//		return -EINVAL;
 
-	cpsw_mdio_disable(mdio);
-	cpsw_mdio_enable_manual_mode(mdio);
-	cpsw_mdio_sw_preamble(mdio);
+        mdiobb_cmd(mdio, MDIO_WRITE, phy_id, phy_reg);
 
-	cpsw_mdio_sw_clr_bit(mdio, MDIO_MDCLK);
-	cpsw_mdio_sw_set_bit(mdio, MDIO_OE);
-
-	/* Issue clause 22 MII write function {0,1,0,1} */
-	cpsw_mdio_man_send_pattern(mdio, C22_BITRANGE, C22_WRITE_PATTERN);
-
-	/* Send the device number MSB first */
-	cpsw_mdio_man_send_pattern(mdio, PHY_BITRANGE, phy_id);
-
-	/* Send the register number MSB first */
-	cpsw_mdio_man_send_pattern(mdio, PHY_BITRANGE, phy_reg);
-
-	/* set turn-around cycles */
-	cpsw_mdio_sw_set_bit(mdio, MDIO_PIN);
-	cpsw_mdio_toggle_man_bit(mdio, MDIO_MDCLK);
-	cpsw_mdio_sw_clr_bit(mdio, MDIO_PIN);
-	cpsw_mdio_toggle_man_bit(mdio, MDIO_MDCLK);
-
-	/* Send Register data MSB first */
-	cpsw_mdio_man_send_pattern(mdio, PHY_DATA_BITRANGE, phy_data);
-	cpsw_mdio_sw_clr_bit(mdio, MDIO_OE);
-
-	cpsw_mdio_sw_clr_bit(mdio, MDIO_MDCLK);
-	cpsw_mdio_sw_clr_bit(mdio, MDIO_MDCLK);
-	cpsw_mdio_sw_clr_bit(mdio, MDIO_MDCLK);
-	cpsw_mdio_toggle_man_bit(mdio, MDIO_MDCLK);
-
-	return 0;
+//	printf("write %d %d %d = 0x%x\n", phy_id, dev_addr, phy_reg, phy_data);
+        return mdiobb_write_common(mdio, phy_data);
 }
 
 /* wait until hardware is ready for another user access */
@@ -398,10 +409,12 @@ struct mii_dev *cpsw_mdio_init(const char *name, phys_addr_t mdio_base,
 	cpsw_mdio->div &= CONTROL_DIV_MASK;
 
 	/* set enable and clock divider */
+/*
 	writel(cpsw_mdio->div | CONTROL_ENABLE | CONTROL_FAULT |
 	       CONTROL_FAULT_ENABLE, &cpsw_mdio->regs->control);
 	wait_for_bit_le32(&cpsw_mdio->regs->control,
 			  CONTROL_IDLE, false, CPSW_MDIO_TIMEOUT, true);
+*/
 
 	/*
 	 * wait for scan logic to settle:
@@ -416,6 +429,12 @@ struct mii_dev *cpsw_mdio_init(const char *name, phys_addr_t mdio_base,
 	if (manual_mode) {
 		cpsw_mdio->bus->read = cpsw_mdio_sw_read;
 		cpsw_mdio->bus->write = cpsw_mdio_sw_write;
+		/* idle state */
+		set_mdc(cpsw_mdio, 0);
+		set_mdio_data(cpsw_mdio, 1);
+		set_mdio_dir(cpsw_mdio, 0);
+		cpsw_mdio_disable(cpsw_mdio);
+		cpsw_mdio_enable_manual_mode(cpsw_mdio);
 	} else {
 		cpsw_mdio->bus->read = cpsw_mdio_read;
 		cpsw_mdio->bus->write = cpsw_mdio_write;
