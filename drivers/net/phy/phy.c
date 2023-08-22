@@ -928,7 +928,7 @@ struct phy_device *phy_connect(struct mii_dev *bus, int addr,
 	if (phydev)
 		phy_connect_dev(phydev, dev, interface);
 	else
-		printf("Could not get PHY for %s: addr %d\n", bus->name, addr);
+		debug("Could not get PHY for %s: addr %d\n", bus->name, addr);
 	return phydev;
 }
 
